@@ -1,8 +1,15 @@
 {
   "name": "memoose-js",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "repository": {
+    "url": "https://github.com/anuragdalia/memoose-js"
+  },
+  "author": {
+    "name": "Anurag Dalia",
+    "url": "https://twitter.com/anuragdalia"
+  },
   "license": "MIT",
   "scripts": {
     "build": "tsc"
