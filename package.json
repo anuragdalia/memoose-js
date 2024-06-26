@@ -1,0 +1,22 @@
+{
+  "name": "memoose-js",
+  "version": "1.0.1",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "license": "MIT",
+  "scripts": {
+    "build": "tsc"
+  },
+  "dependencies": {
+    "object-hash": "^3.0.0"
+  },
+  "optionalDependencies": {
+    "ioredis": "^5.4.1",
+    "mongoose": "^8.4.4"
+  },
+  "devDependencies": {
+    "@types/object-hash": "^3.0.6",
+    "@types/node": "^20.14.9",
+    "typescript": "^5.5.2"
+  }
+}

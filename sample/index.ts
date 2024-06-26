@@ -1,10 +1,3 @@
-# memoose-js
-
-For easy caching in nodejs applications
-
-WIP
-### Sample Usage
-```typescript
 import {Memoize, MemoryCacheProvider, RedisCacheProvider} from "../dist";
 
 function squareOf(param: number) {
@@ -28,4 +21,3 @@ async function main() {
 }
 
 main()
-```
