@@ -1,5 +1,3 @@
-# memoose-js
-
 # Memoose-js
 
 **Memoose-js** is a versatile memoization library designed to optimize performance in JavaScript applications by caching
@@ -30,8 +28,7 @@ implement.
 
 ## Contributing
 
-We welcome contributions from the community! If you're interested in improving **memoose-js**, please take a look at
-our [contributing guidelines](/CONTRIBUTING.md) for instructions on how to get started. We appreciate any contributions,
+We welcome contributions from the community! We appreciate any contributions,
 whether they are feature enhancements, bug fixes, documentation updates, or test improvements.
 
 ### Sample Usage
