@@ -1,20 +1,24 @@
-import {CacheProvider, Pipeline} from "./base";
+import {CacheKey, CacheProvider, Pipeline} from "./base";
 import {setInterval} from "timers";
+
+
+type CacheInternalObj = { data: any, reject: boolean }
 
 class CacheObject {
     key: string;
     data: { data: any, reject: boolean };
     ttl: number;
 
-    constructor(key: string, data: { data: any, reject: boolean }, ttl: number) {
+    constructor(key: string, data: CacheInternalObj, ttl: number) {
         this.key = key;
         this.data = data;
         this.ttl = ttl;
     }
 }
 
-export class MemoryCacheProvider implements CacheProvider {
+export class MemoryCacheProvider implements CacheProvider<CacheInternalObj> {
     private readonly store: Record<string, CacheObject>;
+    readonly storesAsObj: boolean = true
 
     constructor() {
         this.store = {};
@@ -27,7 +31,7 @@ export class MemoryCacheProvider implements CacheProvider {
         }, 1000);
     }
 
-    pipeline(): Pipeline {
+    pipeline(): Pipeline<CacheInternalObj> {
         throw new Error("Method not implemented.");
     }
 
@@ -36,9 +40,10 @@ export class MemoryCacheProvider implements CacheProvider {
     }
 
     expire(key: string, new_ttl_from_now: number): Promise<0 | 1> {
+        const now = Date.now()
         const object: CacheObject = this.store[key];
-        if (!!object && object.ttl < Date.now()) {
-            object.ttl = Date.now() + (new_ttl_from_now * 1000);
+        if (!!object && object.ttl > now) {
+            object.ttl = now + (new_ttl_from_now * 1000);
             return Promise.resolve(1);
         }
         return Promise.resolve(0);
@@ -49,7 +54,7 @@ export class MemoryCacheProvider implements CacheProvider {
         return Promise.resolve(keys.length);
     }
 
-    set(key: string, data: { data: any, reject: boolean }, ttl: number): Promise<any> {
+    set(key: string, data: CacheInternalObj, ttl: number): Promise<any> {
         this.store[key] = new CacheObject(key, data, Date.now() + (ttl * 1000));
         return Promise.resolve(data);
     }
@@ -70,18 +75,30 @@ export class MemoryCacheProvider implements CacheProvider {
         return Promise.resolve(this.store);
     }
 
-    mget(...keys: string[]): Promise<(any | null)[]> {
-        return Promise.all(keys.map((obj, index) => {
+    flushdb() {
+        return this.del(...Object.keys(this.store))
+    }
+
+    async mget(...keys: CacheKey[]): Promise<(any | null)[]> {
+        const now = Date.now()
+        return Promise.all(keys.map(async (obj, index) => {
             const object: CacheObject = this.store[keys[index]];
             if (!!object) {
-                if (object.ttl < Date.now()) {
-                    return this.del(keys[index]).then(_ => null);
+                if (object.ttl < now) {
+                    await this.del(keys[index])
+                    return null;
                 }
-                return Promise.resolve(object.data);
+                return object.data;
             } else {
-                return Promise.resolve(null);
+                return null;
             }
         }))
+    }
+
+    async mset(...kvPairs: [CacheKey, CacheInternalObj][]): Promise<"OK" | null> {
+        //hardcoded to 5mins ttl
+        kvPairs.forEach(([cachekey, obj]) => this.set(cachekey, obj, 300))
+        return "OK"
     }
 }
 

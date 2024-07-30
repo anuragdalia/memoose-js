@@ -4,7 +4,7 @@ import ObjectId = Schema.Types.ObjectId;
 import _ from "lodash";
 
 
-export class CacheKey {
+export class CacheKeyGenerator {
     private readonly function_name: string;
     private readonly should_sort_args: boolean;
 
@@ -13,7 +13,7 @@ export class CacheKey {
         this.should_sort_args = should_sort_args;
     }
 
-    for(args: any[]) {
+    for(...args: any[]) {
         let cache_key: string;
 
         let flattened_String = this.flattenObject([...args]);
@@ -30,8 +30,7 @@ export class CacheKey {
         return cache_key;
     }
 
-
-    public flattenObject(o: any): any {
+    private flattenObject(o: any): any {
 
         if (o === undefined) return "__undefined__";
         if (o === null) return "__null__";
@@ -55,6 +54,4 @@ export class CacheKey {
 
         return String(o);
     }
-
-
 }

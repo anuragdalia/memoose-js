@@ -1,30 +1,36 @@
+export type CacheKey = string
+export type TTL = number
 
-interface CacheProviderCore {
-    get(key: string): Promise<any | null>;
+interface CacheProviderCore<T> {
+    get(key: CacheKey): Promise<T | null>;
 
-    mget(...key: string[]): Promise<(any | null)[]>
+    mget(...key: CacheKey[]): Promise<(T | null)[]>
 
-    set(key: string, data: any, ttl?: number): Promise<"OK" | null>;
+    mset(...key: [CacheKey, T][]): Promise<"OK" | null>
 
-    del(...key: string[]): Promise<number>;
+    set(key: CacheKey, data: T, ttl?: TTL): Promise<"OK" | null>;
 
-    expire(key: string, new_ttl_from_now: number): Promise<0 | 1>;
+    del(...key: CacheKey[]): Promise<number>;
+
+    expire(key: CacheKey, new_ttl_from_now: TTL): Promise<0 | 1>;
 }
 
-export interface CacheProvider extends CacheProviderCore {
+export interface CacheProvider<T> extends CacheProviderCore<T> {
     name(): string;
 
-    pipeline(): Pipeline;
+    pipeline(): Pipeline<T>;
+
+    get storesAsObj(): boolean
 }
 
-export interface Pipeline {
-    get(key: string): Pipeline;
+export interface Pipeline<T> {
+    get(key: CacheKey): Pipeline<T>;
 
-    set(key: string, data: string, ttl?: number): Pipeline;
+    set(key: CacheKey, data: T, ttl?: number): Pipeline<T>;
 
-    del(key: string): Pipeline;
+    del(key: CacheKey): Pipeline<T>;
 
-    expire(key: string, new_ttl_from_now: number): Pipeline;
+    expire(key: CacheKey, new_ttl_from_now: number): Pipeline<T>;
 
     exec(): Promise<any[]>;
 }

@@ -1,6 +1,6 @@
 {
   "name": "memoose-js",
-  "version": "1.0.2",
+  "version": "1.1.0",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "repository": {
@@ -12,7 +12,8 @@
   },
   "license": "MIT",
   "scripts": {
-    "build": "tsc"
+    "build": "tsc",
+    "test": "ts-node sample"
   },
   "dependencies": {
     "object-hash": "^3.0.0"

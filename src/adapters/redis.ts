@@ -1,11 +1,13 @@
 import IORedis, {Redis, RedisOptions} from "ioredis";
-import {CacheProvider} from "./base";
+import {CacheKey, CacheProvider} from "./base";
 
-export class RedisCacheProvider implements CacheProvider {
+export class RedisCacheProvider implements CacheProvider<string> {
 
     name(): string {
         return "redis";
     }
+
+    readonly storesAsObj: boolean = false
 
     private readonly client_client: Redis;
     private readonly connected_promise: any;
@@ -67,11 +69,15 @@ export class RedisCacheProvider implements CacheProvider {
     }
 
     expire(key: string, ttl: number) {
-        return this.client_client.expire(key, ttl) as Promise<0|1>;
+        return this.client_client.expire(key, ttl) as Promise<0 | 1>;
     }
 
     mget(...keys: string[]) {
         return this.client_client.mget(...keys);
+    }
+
+    mset(...keyValues: [CacheKey, string][]) {
+        return this.client_client.mset(...keyValues as any);
     }
 
     exists(...keys: string[]) {
