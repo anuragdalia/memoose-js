@@ -1,11 +1,11 @@
-import {Args, Memoize, MemoryCacheProvider, RedisCacheProvider} from "../dist";
+import {Memoize, MemoryCacheProvider, RedisCacheProvider} from "../dist";
 import {MemoizeConfig} from "../dist/";
 
 
 const redisCP = new RedisCacheProvider("redis", {lazyConnect: true}, true);
 const memoryCP = new MemoryCacheProvider()
 
-function generateTester(memoizeConfig: MemoizeConfig) {
+function generateTester<R extends Array<any> = any[], T = any>(memoizeConfig: MemoizeConfig<R, T>) {
     let lastCallWasHit = true
     let simulateRejection = false
 
@@ -26,9 +26,10 @@ function generateTester(memoizeConfig: MemoizeConfig) {
             simulateRejection = false;
         },
         simulateRejection: (bool: boolean) => simulateRejection = bool,
-        testObj: new Memoize(computeSum, 10, memoizeConfig)
+        testObj: new Memoize<R, T>(computeSum, 10, memoizeConfig)
     }
 }
+
 
 async function sleep(ms: number) {
     return new Promise(resolve => setTimeout(resolve, ms));
@@ -114,31 +115,32 @@ async function testSingle(memoizeConfig: MemoizeConfig) {
     console.log("All tests completed.");
 }
 
-async function testMulti(memoizeConfig: MemoizeConfig) {
-    const tester = generateTester(memoizeConfig);
+async function testMulti<R extends Array<any> = any[], T = any>(memoizeConfig: MemoizeConfig<R, T>) {
+    const tester = generateTester<R, T>(memoizeConfig);
+
 
     const expectedResultMultiExec = [6, 15];  // [1+2+3, 4+5+6]
 
     // Test `multiExec`
-    const r8 = await tester.testObj.multiExec([1, 2, 3], [4, 5, 6]);
+    const r8 = await tester.testObj.multiExec([1, 2, 3] as R, [4, 5, 6] as R);
     assert(JSON.stringify(r8) === JSON.stringify(expectedResultMultiExec), "Test MultiExec Success", "Test MultiExec Failed");
     tester.reset();
 
     // Test `multiCall` function: Cache miss
-    const r10 = await tester.testObj.multiCall([1, 2, 3], [4, 5, 6]);
+    const r10 = await tester.testObj.multiCall([1, 2, 3] as R, [4, 5, 6] as R);
     assert(JSON.stringify(r10) === JSON.stringify(expectedResultMultiExec), "Test MultiCall (Miss) Success", "Test MultiCall (Miss) Failed");
     tester.reset();
 
     // Test `multiCall` function: Cache hit
-    const r11 = await tester.testObj.multiCall([1, 2, 3], [4, 5, 6]);
+    const r11 = await tester.testObj.multiCall([1, 2, 3] as R, [4, 5, 6] as R);
     assert(JSON.stringify(r11) === JSON.stringify(expectedResultMultiExec) && tester.wasLastCallAHit, "Test MultiCall (Hit) Success", "Test MultiCall (Hit) Failed");
     tester.reset();
 
     // Simulate rejection scenario
-    await tester.testObj.demoize(1, 2, 3)
+    await tester.testObj.demoize(...[1, 2, 3] as R)
     tester.simulateRejection(true);
     try {
-        await tester.testObj.multiCall([1, 2, 3], [4, 5, 6]);
+        await tester.testObj.multiCall([1, 2, 3] as R, [4, 5, 6] as R);
         assert(false, "Test MultiCall Rejection Fail", "Test MultiCall Rejection Failed because it didnt reject");
     } catch (error) {
         assert(error === "RejectionSimulation triggered", "Test MultiCall Rejection Success", "Test MultiCall Rejection Failed");
@@ -160,14 +162,27 @@ async function testAll() {
     await redisCP.flushdb()
     await testMulti({
         cacheProvider: redisCP,
-        multiExecOverride: async function (...argss: Args[]) {
+        multiExecOverride: async function (...argss: number[][]) {
             return argss.map(args => args.reduce((acc, curr) => acc + curr, 0))
         }
     })
     await memoryCP.flushdb()
+
+    const config1: MemoizeConfig<[number, number, number]> = {
+        cacheProvider: memoryCP,
+        multiExecOverride: async function (...argss: [number, number, number][]) {
+            return argss.map(args => args.reduce((acc, curr) => acc + curr, 0))
+        }
+    }
+    const config2: MemoizeConfig<number[]> = {
+        cacheProvider: memoryCP,
+        multiExecOverride: async function (...argss: number[][]) {
+            return argss.map(args => args.reduce((acc, curr) => acc + curr, 0))
+        }
+    }
     await testMulti({
         cacheProvider: memoryCP,
-        multiExecOverride: async function (...argss: Args[]) {
+        multiExecOverride: async function (...argss: [number, number, number][]) {
             return argss.map(args => args.reduce((acc, curr) => acc + curr, 0))
         }
     })

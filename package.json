@@ -1,6 +1,6 @@
 {
   "name": "memoose-js",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "repository": {
@@ -26,5 +26,24 @@
     "@types/object-hash": "^3.0.6",
     "@types/node": "^20.14.9",
     "typescript": "^5.5.2"
-  }
+  },
+  "keywords": [
+    "memoization",
+    "caching",
+    "performance-enhancement",
+    "data-caching",
+    "function-caching",
+    "cache-management",
+    "ttl-cache",
+    "nodejs-caching",
+    "async-cache",
+    "redis-cache",
+    "memory-cache",
+    "cache-keys",
+    "cache-provider",
+    "efficient-computing",
+    "api-caching",
+    "decorator-cache",
+    "server-side-cache"
+  ]
 }
