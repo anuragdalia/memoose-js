@@ -1,5 +1,5 @@
 import {CacheKeyGenerator as CacheKeyGenerator} from "./CacheKeyGenerator";
-import {CacheKey, CacheProvider, Pipeline, TTL} from "./adapters/base";
+import {CacheKey, CacheProvider, Pipeline, TReplacerFunction, TReviverFunction, TTL} from "./adapters/base";
 import {MemoryCacheProvider, RedisCacheProvider} from "./adapters";
 
 export const stats: any = {redis: {}, memory: {}};
@@ -18,6 +18,8 @@ export class Memoize<Args extends Array<any> = any[], ReturnType = any> {
     private readonly functionName: string;
     private readonly argsOrderVain: boolean;
     private readonly storeAsObj: boolean;
+    private readonly jsonParseReviver: TReviverFunction | undefined
+    private readonly jsonStringifyReplacer: TReplacerFunction | undefined
     private func: Function;
     private cacheKeyGenerator: CacheKeyGenerator;
     private readonly name: string;
@@ -51,6 +53,8 @@ export class Memoize<Args extends Array<any> = any[], ReturnType = any> {
         this.cacheKeyGenerator = options.cacheKeyGenerator || new CacheKeyGenerator(this.functionName, this.argsOrderVain);
         this.cache = options.cacheProvider || new MemoryCacheProvider();
         this.storeAsObj = this.cache.storesAsObj;
+        this.jsonParseReviver = this.cache.jsonParseReviver
+        this.jsonStringifyReplacer = this.cache.jsonStringifyReplacer
         this.name = this.cache.name();
 
         //add chunking for default function if needed
@@ -70,14 +74,14 @@ export class Memoize<Args extends Array<any> = any[], ReturnType = any> {
     }
 
     private processedObjFromCache(this: Memoize<Args, ReturnType>, obj: CachedItem): Promise<ReturnType> {
-        function processStr(obj: string) {
+        function processStr(obj: string, jsonParseReviver?: TReviverFunction) {
             if (obj.indexOf('-undefined-') === 0)
                 return undefined
 
             if (obj.indexOf('-null-') === 0)
                 return null
 
-            return JSON.parse(obj)
+            return JSON.parse(obj, jsonParseReviver)
         }
 
         if (this.storeAsObj && !isString(obj))
@@ -87,16 +91,16 @@ export class Memoize<Args extends Array<any> = any[], ReturnType = any> {
             throw new Error("stored as string but got obj from cache?")
 
         if (obj.indexOf('-reject-') === 0)
-            return Promise.reject(processStr(obj.substr('-reject-'.length)))
+            return Promise.reject(processStr(obj.substr('-reject-'.length), this.jsonParseReviver))
         else
-            return Promise.resolve(processStr(obj))
+            return Promise.resolve(processStr(obj, this.jsonParseReviver))
     }
 
     private processObjForCache(this: Memoize<Args, ReturnType>, obj: any, rejection: boolean = false) {
         if (this.storeAsObj) {
             return {data: obj, reject: rejection}
         } else {
-            let resp_val = JSON.stringify(obj);
+            let resp_val = JSON.stringify(obj, this.jsonStringifyReplacer);
             if (resp_val === undefined) resp_val = '-undefined-';
             if (resp_val === null) resp_val = '-null-';
             if (rejection) resp_val = `-reject-${resp_val}`;

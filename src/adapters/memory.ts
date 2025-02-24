@@ -19,6 +19,9 @@ class CacheObject {
 export class MemoryCacheProvider implements CacheProvider<CacheInternalObj> {
     private readonly store: Record<string, CacheObject>;
     readonly storesAsObj: boolean = true
+    // Note: science this is a memory cache stores directly Objects, we don't need to worry about serialization/de-serialization
+    readonly jsonParseReviver = undefined
+    readonly jsonStringifyReplacer = undefined 
 
     constructor() {
         this.store = {};
