@@ -24,13 +24,13 @@ export interface SerializationOptions {
 }
 
 export interface CacheProvider<T> extends CacheProviderCore<T> {
-  name(): string;
+    name(): string;
 
-  pipeline(): Pipeline<T>;
+    pipeline(): Pipeline<T>;
 
-  get storesAsObj(): boolean
+    get storesAsObj(): boolean
 
-  get serializationOptions(): SerializationOptions
+    get serializationOptions(): SerializationOptions
 }
 
 export interface Pipeline<T> {
