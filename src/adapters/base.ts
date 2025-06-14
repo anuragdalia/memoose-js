@@ -15,8 +15,13 @@ interface CacheProviderCore<T> {
     expire(key: CacheKey, new_ttl_from_now: TTL): Promise<0 | 1>;
 }
 
-export type TReplacerFunction = (key: string, value: any) => string;
-export type TReviverFunction = (key: string, value: any) => any;
+export type TSerializer = (key: string, value: any) => string;
+export type TDeserializer = (key: string, value: any) => any;
+
+export interface SerializationOptions {
+  serializer?: TSerializer;
+  deserializer?: TDeserializer;
+}
 
 export interface CacheProvider<T> extends CacheProviderCore<T> {
   name(): string;
@@ -25,8 +30,7 @@ export interface CacheProvider<T> extends CacheProviderCore<T> {
 
   get storesAsObj(): boolean
 
-  get jsonStringifyReplacer(): TReplacerFunction | undefined;
-  get jsonParseReviver(): TReviverFunction | undefined;
+  get serializationOptions(): SerializationOptions
 }
 
 export interface Pipeline<T> {

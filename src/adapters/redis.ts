@@ -1,5 +1,5 @@
 import IORedis, {Redis, RedisOptions} from "ioredis";
-import { CacheKey, CacheProvider, TReplacerFunction, TReviverFunction } from "./base";
+import { CacheKey, CacheProvider, SerializationOptions } from "./base";
 
 export class RedisCacheProvider implements CacheProvider<string> {
 
@@ -8,22 +8,29 @@ export class RedisCacheProvider implements CacheProvider<string> {
     }
 
     readonly storesAsObj: boolean = false
-    readonly jsonParseReviver: TReviverFunction | undefined
-    readonly jsonStringifyReplacer: TReplacerFunction | undefined
+    private readonly _serializationOptions: SerializationOptions
+
+    get serializationOptions(): SerializationOptions {
+        return this._serializationOptions;
+    }
 
     private readonly client_client: Redis;
     private readonly connected_promise: any;
     private readonly connect: boolean;
 
-    constructor(name: string, options: RedisOptions, connect: boolean = true, jsonParseReviver?: TReviverFunction, jsonStringifyReplacer?: TReplacerFunction) {
+    constructor(
+        name: string, 
+        options: RedisOptions, 
+        connect: boolean = true, 
+        serializationOptions: SerializationOptions = {}
+    ) {
         this.client_client = new IORedis(options);
         this.connect = connect;
         if (connect)
             this.connected_promise = this.client_client.connect();
         else
             this.connected_promise = Promise.resolve("told not to connect");
-        this.jsonParseReviver = jsonParseReviver 
-        this.jsonStringifyReplacer = jsonStringifyReplacer 
+        this._serializationOptions = serializationOptions;
 
         const errorOrCloseCB = (...args: any[]) => {
             console.log(`Error in RedisClient: ${name}.`, "\r\n", ...args);

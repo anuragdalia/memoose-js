@@ -1,4 +1,4 @@
-import {CacheKey, CacheProvider, Pipeline} from "./base";
+import {CacheKey, CacheProvider, Pipeline, SerializationOptions} from "./base";
 import {setInterval} from "timers";
 
 
@@ -19,9 +19,13 @@ class CacheObject {
 export class MemoryCacheProvider implements CacheProvider<CacheInternalObj> {
     private readonly store: Record<string, CacheObject>;
     readonly storesAsObj: boolean = true
-    // Note: science this is a memory cache stores directly Objects, we don't need to worry about serialization/de-serialization
-    readonly jsonParseReviver = undefined
-    readonly jsonStringifyReplacer = undefined 
+    // Note: since this is a memory cache that stores objects directly, 
+    // we don't need to worry about serialization/deserialization
+    private readonly _serializationOptions: SerializationOptions = {}
+    
+    get serializationOptions(): SerializationOptions {
+        return this._serializationOptions;
+    }
 
     constructor() {
         this.store = {};

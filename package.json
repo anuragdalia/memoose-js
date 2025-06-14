@@ -16,6 +16,7 @@
     "test": "ts-node sample"
   },
   "dependencies": {
+    "lodash": "^4.17.21",
     "object-hash": "^3.0.0"
   },
   "optionalDependencies": {
@@ -23,8 +24,10 @@
     "mongoose": "^8.4.4"
   },
   "devDependencies": {
-    "@types/object-hash": "^3.0.6",
+    "@types/lodash": "^4.17.16",
     "@types/node": "^20.14.9",
+    "@types/object-hash": "^3.0.6",
+    "ts-node": "^10.9.2",
     "typescript": "^5.5.2"
   },
   "keywords": [

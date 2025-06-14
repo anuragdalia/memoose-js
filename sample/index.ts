@@ -1,9 +1,34 @@
 import {Memoize, MemoryCacheProvider, RedisCacheProvider} from "../dist";
-import {MemoizeConfig} from "../dist/";
+import {MemoizeConfig, SerializationOptions} from "../dist/";
 
 
-const redisCP = new RedisCacheProvider("redis", {lazyConnect: true}, true);
-const memoryCP = new MemoryCacheProvider()
+// Create Redis cache provider with custom serialization options for handling BigInt
+const bigIntSerializationOptions: SerializationOptions = {
+    serializer: (key: string, value: any): any => {
+        // Handle BigInt values which aren't serializable in standard JSON
+        if (typeof value === 'bigint') {
+            return `__BIGINT__${value.toString()}`;
+        }
+        return value;
+    },
+    deserializer: (key: string, value: any): any => {
+        // Convert serialized BigInt strings back to BigInt objects
+        if (typeof value === 'string' && value.startsWith('__BIGINT__')) {
+            return BigInt(value.substring(10));
+        }
+        return value;
+    }
+};
+
+// Redis provider with BigInt serialization support
+const redisCP = new RedisCacheProvider(
+    "redis", 
+    {lazyConnect: true}, 
+    true, 
+    bigIntSerializationOptions
+);
+
+const memoryCP = new MemoryCacheProvider();
 
 function generateTester<R extends Array<any> = any[], T = any>(memoizeConfig: MemoizeConfig<R, T>) {
     let lastCallWasHit = true
@@ -52,6 +77,31 @@ async function testSerialization(memoizeConfig: MemoizeConfig) {
     await tester.testObj.update(1, complexObject);
     const result = await tester.testObj.call(1);
     assert(JSON.stringify(result) === JSON.stringify(complexObject), "Serialization Test Success", "Serialization Test Failed");
+    tester.reset();
+}
+
+async function testBigIntSerialization(memoizeConfig: MemoizeConfig) {
+    const tester = generateTester(memoizeConfig);
+    // Create object with BigInt values similar to what might come from a SQL database
+    const dbRecord = {
+        id: BigInt(9007199254740991), // Larger than MAX_SAFE_INTEGER
+        name: "Test Record",
+        timestamp: BigInt(1682536789123)
+    };
+    
+    // Store the record in cache
+    await tester.testObj.update(2, dbRecord);
+    
+    // Retrieve from cache
+    const result = await tester.testObj.call(2);
+    
+    // Verify the BigInt values were preserved
+    const bigIntPreserved = typeof result.id === 'bigint' && 
+                           result.id === dbRecord.id &&
+                           typeof result.timestamp === 'bigint' &&
+                           result.timestamp === dbRecord.timestamp;
+                           
+    assert(bigIntPreserved, "BigInt Serialization Test Success", "BigInt Serialization Test Failed");
     tester.reset();
 }
 
@@ -196,6 +246,13 @@ async function testAll() {
     await testSerialization({cacheProvider: redisCP})
     await memoryCP.flushdb()
     await testSerialization({cacheProvider: memoryCP})
+    
+    // Test BigInt serialization with Redis (uses our custom serialization)
+    await redisCP.flushdb()
+    await testBigIntSerialization({cacheProvider: redisCP})
+    // Memory cache should work without special serialization since it stores objects directly
+    await memoryCP.flushdb()
+    await testBigIntSerialization({cacheProvider: memoryCP})
 }
 
 testAll()
