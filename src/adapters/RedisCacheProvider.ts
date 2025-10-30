@@ -1,5 +1,5 @@
 import IORedis, {Redis, RedisOptions} from "ioredis";
-import { CacheKey, CacheProvider, SerializationOptions } from "./base";
+import {CacheKey, CacheProvider, Pipeline, SerializationOptions, TTL} from "./base";
 
 export class RedisCacheProvider implements CacheProvider<string> {
 
@@ -19,9 +19,9 @@ export class RedisCacheProvider implements CacheProvider<string> {
     private readonly connect: boolean;
 
     constructor(
-        name: string, 
-        options: RedisOptions, 
-        connect: boolean = true, 
+        name: string,
+        options: RedisOptions,
+        connect: boolean = true,
         serializationOptions: SerializationOptions = {}
     ) {
         this.client_client = new IORedis(options);
@@ -49,18 +49,18 @@ export class RedisCacheProvider implements CacheProvider<string> {
             throw new Error("shouldnt call as client initialised with connect=false");
     }
 
-    get(key: string) {
+    async get(key: string): Promise<string | null> {
         return this.client_client.get(key);
     }
 
-    set(key: string, value: string, ttl: number = -1) {
-        if (ttl > 0)
+    async set(key: string, value: string, ttl?: TTL): Promise<"OK" | null> {
+        if (ttl && ttl > 0)
             return this.client_client.set(key, value, "EX", ttl);
         else
             return this.client_client.set(key, value);
     }
 
-    del(...keys: string[]) {
+    async del(...keys: string[]): Promise<number> {
         return this.client_client.del(...keys);
     }
 
@@ -75,19 +75,19 @@ export class RedisCacheProvider implements CacheProvider<string> {
         return this.client_client;
     }
 
-    pipeline() {
+    pipeline(): Pipeline<string> {
         return this.client_client.pipeline() as any;
     }
 
-    expire(key: string, ttl: number) {
+    async expire(key: string, ttl: number): Promise<0 | 1> {
         return this.client_client.expire(key, ttl) as Promise<0 | 1>;
     }
 
-    mget(...keys: string[]) {
+    async mget(...keys: string[]): Promise<(string | null)[]> {
         return this.client_client.mget(...keys);
     }
 
-    mset(...keyValues: [CacheKey, string][]) {
+    async mset(...keyValues: [CacheKey, string][]): Promise<"OK" | null> {
         return this.client_client.mset(...keyValues as any);
     }
 

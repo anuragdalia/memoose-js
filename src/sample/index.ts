@@ -1,5 +1,11 @@
-import {Memoize, MemoryCacheProvider, RedisCacheProvider} from "../dist";
-import {MemoizeConfig, SerializationOptions} from "../dist/";
+import {
+    CachedItem,
+    InMemoryCacheProvider,
+    Memoize,
+    MemoizeConfig,
+    RedisCacheProvider,
+    SerializationOptions
+} from "../../dist";
 
 
 // Create Redis cache provider with custom serialization options for handling BigInt
@@ -22,13 +28,13 @@ const bigIntSerializationOptions: SerializationOptions = {
 
 // Redis provider with BigInt serialization support
 const redisCP = new RedisCacheProvider(
-    "redis", 
-    {lazyConnect: true}, 
-    true, 
+    "redis",
+    {lazyConnect: true},
+    true,
     bigIntSerializationOptions
 );
 
-const memoryCP = new MemoryCacheProvider();
+const memoryCP = new InMemoryCacheProvider<CachedItem>();
 
 function generateTester<R extends Array<any> = any[], T = any>(memoizeConfig: MemoizeConfig<R, T>) {
     let lastCallWasHit = true
@@ -88,19 +94,19 @@ async function testBigIntSerialization(memoizeConfig: MemoizeConfig) {
         name: "Test Record",
         timestamp: BigInt(1682536789123)
     };
-    
+
     // Store the record in cache
     await tester.testObj.update(2, dbRecord);
-    
+
     // Retrieve from cache
     const result = await tester.testObj.call(2);
-    
+
     // Verify the BigInt values were preserved
-    const bigIntPreserved = typeof result.id === 'bigint' && 
-                           result.id === dbRecord.id &&
-                           typeof result.timestamp === 'bigint' &&
-                           result.timestamp === dbRecord.timestamp;
-                           
+    const bigIntPreserved = typeof result.id === 'bigint' &&
+        result.id === dbRecord.id &&
+        typeof result.timestamp === 'bigint' &&
+        result.timestamp === dbRecord.timestamp;
+
     assert(bigIntPreserved, "BigInt Serialization Test Success", "BigInt Serialization Test Failed");
     tester.reset();
 }
@@ -246,7 +252,7 @@ async function testAll() {
     await testSerialization({cacheProvider: redisCP})
     await memoryCP.flushdb()
     await testSerialization({cacheProvider: memoryCP})
-    
+
     // Test BigInt serialization with Redis (uses our custom serialization)
     await redisCP.flushdb()
     await testBigIntSerialization({cacheProvider: redisCP})
