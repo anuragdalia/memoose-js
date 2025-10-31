@@ -148,6 +148,41 @@ describe("Memoize Tests", () => {
             await expect(tester.testObj.multiCall([1, 2, 3], [4, 5, 6])).rejects.toBe("RejectionSimulation triggered");
         });
 
+        test("should NOT cache rejections in multiCall (retry-friendly)", async () => {
+            const tester = generateTester({cacheProvider: redisCP});
+
+            // Clear any cached values
+            await tester.testObj.demoize(1, 2, 3);
+            await tester.testObj.demoize(4, 5, 6);
+
+            // Enable rejection simulation
+            tester.simulateRejection(true);
+
+            // Test that multiCall rejects when function fails
+            await expect(tester.testObj.multiCall([1, 2, 3], [4, 5, 6])).rejects.toBe("RejectionSimulation triggered");
+
+            // Disable rejection - second call should succeed immediately
+            // This is the desired behavior: rejections are NOT cached in multiCall
+            tester.simulateRejection(false);
+            tester.reset();
+
+            // This call should succeed because rejections were NOT cached
+            const result = await tester.testObj.multiCall([1, 2, 3], [4, 5, 6]);
+            expect(result).toEqual([6, 15]);
+            expect(tester.wasLastCallAHit).toBe(false); // Function executed (not from cache)
+
+            // Verify that single call DOES cache rejections (for comparison)
+            tester.simulateRejection(true);
+            await expect(tester.testObj.call(7, 8, 9)).rejects.toBe("RejectionSimulation triggered");
+
+            tester.simulateRejection(false);
+            tester.reset();
+
+            // Single call returns cached rejection
+            await expect(tester.testObj.call(7, 8, 9)).rejects.toBe("RejectionSimulation triggered");
+            expect(tester.wasLastCallAHit).toBe(true); // Rejection was cached
+        });
+
         test("should handle cache key generation with order variation", async () => {
             const tester = generateTester({cacheProvider: redisCP, argsOrderVain: true});
             await tester.testObj.call(3, 2, 1);
@@ -268,6 +303,41 @@ describe("Memoize Tests", () => {
             await tester.testObj.demoize(1, 2, 3);
             tester.simulateRejection(true);
             await expect(tester.testObj.multiCall([1, 2, 3], [4, 5, 6])).rejects.toBe("RejectionSimulation triggered");
+        });
+
+        test("should NOT cache rejections in multiCall (retry-friendly)", async () => {
+            const tester = generateTester({cacheProvider: memoryCP});
+
+            // Clear any cached values
+            await tester.testObj.demoize(1, 2, 3);
+            await tester.testObj.demoize(4, 5, 6);
+
+            // Enable rejection simulation
+            tester.simulateRejection(true);
+
+            // Test that multiCall rejects when function fails
+            await expect(tester.testObj.multiCall([1, 2, 3], [4, 5, 6])).rejects.toBe("RejectionSimulation triggered");
+
+            // Disable rejection - second call should succeed immediately
+            // This is the desired behavior: rejections are NOT cached in multiCall
+            tester.simulateRejection(false);
+            tester.reset();
+
+            // This call should succeed because rejections were NOT cached
+            const result = await tester.testObj.multiCall([1, 2, 3], [4, 5, 6]);
+            expect(result).toEqual([6, 15]);
+            expect(tester.wasLastCallAHit).toBe(false); // Function executed (not from cache)
+
+            // Verify that single call DOES cache rejections (for comparison)
+            tester.simulateRejection(true);
+            await expect(tester.testObj.call(7, 8, 9)).rejects.toBe("RejectionSimulation triggered");
+
+            tester.simulateRejection(false);
+            tester.reset();
+
+            // Single call returns cached rejection
+            await expect(tester.testObj.call(7, 8, 9)).rejects.toBe("RejectionSimulation triggered");
+            expect(tester.wasLastCallAHit).toBe(true); // Rejection was cached
         });
 
         test("should handle cache key generation with order variation", async () => {
