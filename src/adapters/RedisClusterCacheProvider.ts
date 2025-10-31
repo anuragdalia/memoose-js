@@ -3,24 +3,35 @@ import {ClusterOptions} from "ioredis/built/cluster/ClusterOptions";
 import {ClusterNode} from "ioredis/built/cluster";
 import {CacheKey, CacheProvider, Pipeline, SerializationOptions, TTL} from "./base";
 
+export interface RedisClusterCacheProviderOptions {
+    failFast?: boolean; // Default true - exit process on connection failure
+    exitCode?: number;  // Default 1 - exit code to use
+    onFatalError?: (error: Error) => void; // Hook before exit
+}
+
 export class RedisClusterCacheProvider implements CacheProvider<string> {
 
-    readonly storesAsObj: boolean = false
     private readonly client_client: Cluster;
-    private readonly connected_promise: any;
-    private readonly connect: boolean;
+
+    readonly storesAsObj: boolean = false
     private readonly _serializationOptions: SerializationOptions;
 
     get serializationOptions(): SerializationOptions {
         return this._serializationOptions;
     }
+    private readonly connected_promise: any;
+    private readonly connect: boolean;
 
     constructor(
         name: string,
         config: { nodes: ClusterNode[], options: ClusterOptions },
         connect: boolean = true,
-        serializationOptions: SerializationOptions = {}
+        serializationOptions: SerializationOptions = {},
+        private readonly providerOptions: RedisClusterCacheProviderOptions = {}
     ) {
+        // Set defaults
+        this.providerOptions.failFast = this.providerOptions.failFast ?? true;
+        this.providerOptions.exitCode = this.providerOptions.exitCode ?? 1;
         const {nodes, options} = config
         this.client_client = new Cluster(nodes, options);
         this.connect = connect;
@@ -30,22 +41,43 @@ export class RedisClusterCacheProvider implements CacheProvider<string> {
         else
             this.connected_promise = Promise.resolve("told not to connect");
 
-        const errorOrCloseCB = (...args: any[]) => {
-            console.log(`Error in RedisClient: ${name}.`, "\r\n", ...args);
-            process.exit(55666);
-        }
-        this.client_client.on("end", errorOrCloseCB.bind(null, "end"))
-        this.client_client.on("error", errorOrCloseCB.bind(null, "error"));
-        this.client_client.on("close", errorOrCloseCB.bind(null, "close"));
-        this.client_client.on("finish", errorOrCloseCB.bind(null, "finish"));
+        const handleFatalError = (type: string, error?: any) => {
+            const errorMessage = `FATAL: Redis cluster connection failure for cache '${name}' [${type}]`;
+            console.error(errorMessage, error);
+
+            if (this.providerOptions.failFast) {
+                console.error(`Cache cluster is configured as critical. Exiting with code ${this.providerOptions.exitCode}.`);
+
+                // Call cleanup hook if provided
+                if (this.providerOptions.onFatalError) {
+                    try {
+                        this.providerOptions.onFatalError(new Error(errorMessage));
+                    } catch (e) {
+                        console.error('Error in onFatalError hook:', e);
+                    }
+                }
+
+                // Give time for logs to flush
+                setTimeout(() => {
+                    process.exit(this.providerOptions.exitCode!);
+                }, 100);
+            } else {
+                // Non-critical mode: emit error for application handling
+                this.client_client.emit('connection-error', {type, error, timestamp: Date.now()});
+            }
+        };
+
+        // Connection-critical events
+        this.client_client.on("error", (err) => handleFatalError("error", err));
+        this.client_client.on("end", () => {
+            if (this.connect) {  // Only fatal if we were supposed to be connected
+                handleFatalError("unexpected-end");
+            }
+        });
     }
 
     get client(): Cluster {
         return this.client_client;
-    }
-
-    name(): string {
-        return "redis";
     }
 
     getClientConnectionPromise() {
@@ -75,6 +107,10 @@ export class RedisClusterCacheProvider implements CacheProvider<string> {
             this.client_client.once("ready", resolve);
             this.client_client.once("error", reject);
         })
+    }
+
+    name(): string {
+        return "redis";
     }
 
     pipeline(): Pipeline<string> {

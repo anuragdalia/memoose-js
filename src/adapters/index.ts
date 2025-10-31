@@ -12,5 +12,5 @@ export {DisabledCacheProvider} from "./DisabledCacheProvider"
 
 export {MemoryCacheProvider} from "./MemoryCacheProvider"
 
-export {RedisCacheProvider} from "./RedisCacheProvider"
-export {RedisClusterCacheProvider} from "./RedisClusterCacheProvider"
+export {RedisCacheProvider, type RedisCacheProviderOptions} from "./RedisCacheProvider"
+export {RedisClusterCacheProvider, type RedisClusterCacheProviderOptions} from "./RedisClusterCacheProvider"

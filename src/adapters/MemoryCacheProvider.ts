@@ -7,6 +7,7 @@ interface CacheEntry {
 
 class MemoryPipeline<T> implements Pipeline<T> {
     private operations: (() => Promise<any>)[] = [];
+    private isExecuting = false;
 
     constructor(private cache: Map<string, CacheEntry>, private provider: MemoryCacheProvider<T>) {
     }
@@ -15,6 +16,10 @@ class MemoryPipeline<T> implements Pipeline<T> {
         this.operations.push(async () => {
             const entry = this.cache.get(key);
             if (!entry || (entry.expiresAt && entry.expiresAt < Date.now())) {
+                // Clean up expired entry if found
+                if (entry && entry.expiresAt && entry.expiresAt < Date.now()) {
+                    this.cache.delete(key);
+                }
                 return null;
             }
             return entry.value;
@@ -52,9 +57,25 @@ class MemoryPipeline<T> implements Pipeline<T> {
     }
 
     async exec(): Promise<any[]> {
-        const results = await Promise.all(this.operations.map(op => op()));
-        this.operations = [];
-        return results;
+        if (this.isExecuting) {
+            throw new Error('Pipeline is already executing');
+        }
+        if (this.operations.length === 0) {
+            return [];
+        }
+
+        this.isExecuting = true;
+        try {
+            // Capture operations to execute
+            const opsToExecute = [...this.operations];
+            this.operations = [];
+
+            // Execute captured operations
+            const results = await Promise.all(opsToExecute.map(op => op()));
+            return results;
+        } finally {
+            this.isExecuting = false;
+        }
     }
 }
 
@@ -62,6 +83,8 @@ export class MemoryCacheProvider<T> implements CacheProvider<T> {
     readonly storesAsObj: boolean = false;
     private readonly cache: Map<string, CacheEntry>;
     private readonly _serializationOptions: SerializationOptions;
+    private cleanupTimer?: NodeJS.Timeout;
+    private readonly cleanupInterval = 60000; // Clean every 60 seconds
 
     get serializationOptions(): SerializationOptions {
         return this._serializationOptions;
@@ -70,6 +93,7 @@ export class MemoryCacheProvider<T> implements CacheProvider<T> {
     constructor(serializationOptions: SerializationOptions = {}) {
         this.cache = new Map();
         this._serializationOptions = serializationOptions;
+        this.startCleanupTimer();
     }
 
     name(): string {
@@ -136,4 +160,26 @@ export class MemoryCacheProvider<T> implements CacheProvider<T> {
         return entry.expiresAt !== undefined && entry.expiresAt < Date.now();
     }
 
+    destroy(): void {
+        if (this.cleanupTimer) {
+            clearInterval(this.cleanupTimer);
+            this.cleanupTimer = undefined;
+        }
+        this.cache.clear();
+    }
+
+    private startCleanupTimer(): void {
+        this.cleanupTimer = setInterval(() => {
+            this.cleanupExpiredEntries();
+        }, this.cleanupInterval);
+    }
+
+    private cleanupExpiredEntries(): void {
+        const now = Date.now();
+        for (const [key, entry] of this.cache.entries()) {
+            if (entry.expiresAt !== undefined && entry.expiresAt < now) {
+                this.cache.delete(key);
+            }
+        }
+    }
 }
