@@ -1,18 +1,14 @@
 import {CacheKey, CacheProvider, Pipeline, SerializationOptions, TTL} from "./base";
 
 interface CacheEntry {
-    value: string;
+    value: any;
     expiresAt?: number;
 }
 
 class MemoryPipeline<T> implements Pipeline<T> {
     private operations: (() => Promise<any>)[] = [];
-    private cache: Map<string, CacheEntry>;
-    private provider: MemoryCacheProvider<T>;
 
-    constructor(cache: Map<string, CacheEntry>, provider: MemoryCacheProvider<T>) {
-        this.cache = cache;
-        this.provider = provider;
+    constructor(private cache: Map<string, CacheEntry>, private provider: MemoryCacheProvider<T>) {
     }
 
     get(key: CacheKey): Pipeline<T> {
@@ -21,16 +17,15 @@ class MemoryPipeline<T> implements Pipeline<T> {
             if (!entry || (entry.expiresAt && entry.expiresAt < Date.now())) {
                 return null;
             }
-            return this.provider.deserialize(entry.value);
+            return entry.value;
         });
         return this;
     }
 
     set(key: CacheKey, data: T, ttl?: number): Pipeline<T> {
         this.operations.push(async () => {
-            const serializedValue = this.provider.serialize(data);
             const entry: CacheEntry = {
-                value: serializedValue,
+                value: data,
                 expiresAt: ttl ? Date.now() + ttl * 1000 : undefined
             };
             this.cache.set(key, entry);
@@ -87,7 +82,7 @@ export class MemoryCacheProvider<T> implements CacheProvider<T> {
             if (entry) this.cache.delete(key);
             return null;
         }
-        return this.deserialize(entry.value);
+        return entry.value as T;
     }
 
     async mget(...keys: CacheKey[]): Promise<(T | null)[]> {
@@ -102,9 +97,8 @@ export class MemoryCacheProvider<T> implements CacheProvider<T> {
     }
 
     async set(key: CacheKey, data: T, ttl?: TTL): Promise<"OK" | null> {
-        const serializedValue = this.serialize(data);
         const entry: CacheEntry = {
-            value: serializedValue,
+            value: data,
             expiresAt: ttl ? Date.now() + ttl * 1000 : undefined
         };
         this.cache.set(key, entry);
@@ -142,13 +136,4 @@ export class MemoryCacheProvider<T> implements CacheProvider<T> {
         return entry.expiresAt !== undefined && entry.expiresAt < Date.now();
     }
 
-    serialize(data: T): string {
-        const serializer = this._serializationOptions.serializer;
-        return serializer ? serializer('', data) : JSON.stringify(data);
-    }
-
-    deserialize(value: string): T {
-        const deserializer = this._serializationOptions.deserializer;
-        return deserializer ? deserializer('', JSON.parse(value)) : JSON.parse(value);
-    }
 }

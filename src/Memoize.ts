@@ -1,6 +1,6 @@
 import {CacheKeyGenerator as CacheKeyGenerator} from "./CacheKeyGenerator";
-import {CacheKey, CacheProvider, Pipeline, TSerializer, TDeserializer, TTL} from "./adapters/base";
-import {MemoryCacheProvider, RedisCacheProvider} from "./adapters";
+import {CacheKey, CacheProvider, Pipeline, TDeserializer, TSerializer, TTL} from "./adapters/base";
+import {MemoryCacheProvider} from "./adapters";
 
 export const stats: any = {redis: {}, memory: {}};
 

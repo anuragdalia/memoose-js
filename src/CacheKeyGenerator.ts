@@ -1,7 +1,7 @@
 import {Schema} from "mongoose";
 import objectHash from "object-hash";
-import ObjectId = Schema.Types.ObjectId;
 import _ from "lodash";
+import ObjectId = Schema.Types.ObjectId;
 
 
 export class CacheKeyGenerator {
@@ -14,20 +14,16 @@ export class CacheKeyGenerator {
     }
 
     for(...args: any[]) {
-        let cache_key: string;
 
         let flattened_String = this.flattenObject([...args]);
 
         if (this.should_sort_args) flattened_String = flattened_String.sort();
 
-        // if ([""].includes(this.function_name))
-        //     console.log(this.function_name, "cache_key_gen", flattened_String);
-
-        cache_key = objectHash([this.function_name, ...flattened_String], {
+        const args_cache_key = objectHash([...flattened_String], {
             ignoreUnknown: true,
             algorithm: 'md5'
         });
-        return cache_key;
+        return `{${this.function_name}}:${args_cache_key}`; //should be safe for all providers currently available needs to be overridden for special cases.
     }
 
     private flattenObject(o: any): any {
