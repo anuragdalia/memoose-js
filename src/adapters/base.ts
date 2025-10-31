@@ -19,8 +19,8 @@ export type TSerializer = (key: string, value: any) => string;
 export type TDeserializer = (key: string, value: any) => any;
 
 export interface SerializationOptions {
-  serializer?: TSerializer;
-  deserializer?: TDeserializer;
+    serializer?: TSerializer;
+    deserializer?: TDeserializer;
 }
 
 export interface CacheProvider<T> extends CacheProviderCore<T> {
@@ -45,3 +45,4 @@ export interface Pipeline<T> {
     exec(): Promise<any[]>;
 }
 
+export {}

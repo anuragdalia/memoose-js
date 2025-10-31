@@ -1,0 +1,201 @@
+import {Cluster} from "ioredis";
+import {ClusterOptions} from "ioredis/built/cluster/ClusterOptions";
+import {ClusterNode} from "ioredis/built/cluster";
+import {CacheKey, CacheProvider, Pipeline, SerializationOptions, TTL} from "./base";
+
+export interface RedisClusterCacheProviderOptions {
+    failFast?: boolean; // Default true - exit process on connection failure
+    exitCode?: number;  // Default 1 - exit code to use
+    onFatalError?: (error: Error) => void; // Hook before exit
+}
+
+export class RedisClusterCacheProvider implements CacheProvider<string> {
+
+    private readonly client_client: Cluster;
+
+    readonly storesAsObj: boolean = false
+    private readonly _serializationOptions: SerializationOptions;
+
+    get serializationOptions(): SerializationOptions {
+        return this._serializationOptions;
+    }
+    private readonly connected_promise: any;
+    private readonly connect: boolean;
+
+    constructor(
+        name: string,
+        config: { nodes: ClusterNode[], options: ClusterOptions },
+        connect: boolean = true,
+        serializationOptions: SerializationOptions = {},
+        private readonly providerOptions: RedisClusterCacheProviderOptions = {}
+    ) {
+        // Set defaults
+        this.providerOptions.failFast = this.providerOptions.failFast ?? true;
+        this.providerOptions.exitCode = this.providerOptions.exitCode ?? 1;
+        const {nodes, options} = config
+        this.client_client = new Cluster(nodes, options);
+        this.connect = connect;
+        this._serializationOptions = serializationOptions;
+        if (connect)
+            this.connected_promise = this.client_client.connect();
+        else
+            this.connected_promise = Promise.resolve("told not to connect");
+
+        const handleFatalError = (type: string, error?: any) => {
+            const errorMessage = `FATAL: Redis cluster connection failure for cache '${name}' [${type}]`;
+            console.error(errorMessage, error);
+
+            if (this.providerOptions.failFast) {
+                console.error(`Cache cluster is configured as critical. Exiting with code ${this.providerOptions.exitCode}.`);
+
+                // Call cleanup hook if provided
+                if (this.providerOptions.onFatalError) {
+                    try {
+                        this.providerOptions.onFatalError(new Error(errorMessage));
+                    } catch (e) {
+                        console.error('Error in onFatalError hook:', e);
+                    }
+                }
+
+                // Give time for logs to flush
+                setTimeout(() => {
+                    process.exit(this.providerOptions.exitCode!);
+                }, 100);
+            } else {
+                // Non-critical mode: emit error for application handling
+                this.client_client.emit('connection-error', {type, error, timestamp: Date.now()});
+            }
+        };
+
+        // Connection-critical events
+        this.client_client.on("error", (err) => handleFatalError("error", err));
+        this.client_client.on("end", () => {
+            if (this.connect) {  // Only fatal if we were supposed to be connected
+                handleFatalError("unexpected-end");
+            }
+        });
+    }
+
+    get client(): Cluster {
+        return this.client_client;
+    }
+
+    getClientConnectionPromise() {
+        if (this.connect)
+            return this.connected_promise;
+        else
+            throw new Error("shouldnt call as client initialised with connect=false");
+    }
+
+    async get(key: string): Promise<string | null> {
+        return this.client_client.get(key);
+    }
+
+    async set(key: string, value: string, ttl?: TTL): Promise<"OK" | null> {
+        if (ttl && ttl > 0)
+            return this.client_client.set(key, value, "EX", ttl);
+        else
+            return this.client_client.set(key, value);
+    }
+
+    async del(...keys: string[]): Promise<number> {
+        return this.client_client.del(...keys);
+    }
+
+    awaitTillReady() {
+        return new Promise((resolve, reject) => {
+            this.client_client.once("ready", resolve);
+            this.client_client.once("error", reject);
+        })
+    }
+
+    name(): string {
+        return "redis";
+    }
+
+    pipeline(): Pipeline<string> {
+        return this.client_client.pipeline() as any;
+    }
+
+    async expire(key: string, ttl: number): Promise<0 | 1> {
+        return this.client_client.expire(key, ttl) as Promise<0 | 1>;
+    }
+
+    async mget(...keys: string[]): Promise<(string | null)[]> {
+        return this.client_client.mget(...keys);
+    }
+
+    async mset(...keyValues: [CacheKey, string][]): Promise<"OK" | null> {
+        return this.client_client.mset(...keyValues as any);
+    }
+
+    exists(...keys: string[]) {
+        return this.client_client.exists(...keys);
+    }
+
+    lpush(key: string, ...values: string[]) {
+        return this.client_client.lpush(key, ...values);
+    }
+
+    llen(key: string) {
+        return this.client_client.llen(key);
+    }
+
+    scard(key: string) {
+        return this.client_client.scard(key);
+    }
+
+    sismember(key: string, member: string) {
+        return this.client_client.sismember(key, member);
+    }
+
+    sadd(key: string, member: any) {
+        return this.client_client.sadd(key, member);
+    }
+
+    srem(key: string, member: any) {
+        return this.client_client.srem(key, member);
+    }
+
+    smembers(key: string) {
+        return this.client_client.smembers(key);
+    }
+
+    rpush(key: string, ...values: any[]) {
+        return this.client_client.rpush(key, ...values);
+    }
+
+    lrange(key: string, start: number, stop: number) {
+        return this.client_client.lrange(key, start, stop);
+    }
+
+    ping() {
+        return this.client_client.ping();
+    }
+
+    subscribe(...channels: any[]) {
+        return this.client_client.subscribe(...channels);
+    }
+
+    on(event: string, listener: (...args: any[]) => void) {
+        return this.client_client.on(event, listener);
+    }
+
+    publish(channel: string, message: string) {
+        return this.client_client.publish(channel, message);
+    }
+
+    flushdb() {
+        return this.client_client.flushdb();
+    }
+
+    lpop(key: string) {
+        return this.client_client.lpop(key)
+    }
+
+    decrby(key: string, count: number) {
+        return this.client_client.decrby(key, count);
+    }
+}
+
+

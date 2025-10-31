@@ -1,5 +1,11 @@
 import IORedis, {Redis, RedisOptions} from "ioredis";
-import { CacheKey, CacheProvider, SerializationOptions } from "./base";
+import {CacheKey, CacheProvider, Pipeline, SerializationOptions, TTL} from "./base";
+
+export interface RedisCacheProviderOptions {
+    failFast?: boolean; // Default true - exit process on connection failure
+    exitCode?: number;  // Default 1 - exit code to use
+    onFatalError?: (error: Error) => void; // Hook before exit
+}
 
 export class RedisCacheProvider implements CacheProvider<string> {
 
@@ -8,7 +14,7 @@ export class RedisCacheProvider implements CacheProvider<string> {
     }
 
     readonly storesAsObj: boolean = false
-    private readonly _serializationOptions: SerializationOptions
+    private readonly _serializationOptions: SerializationOptions;
 
     get serializationOptions(): SerializationOptions {
         return this._serializationOptions;
@@ -19,27 +25,56 @@ export class RedisCacheProvider implements CacheProvider<string> {
     private readonly connect: boolean;
 
     constructor(
-        name: string, 
-        options: RedisOptions, 
-        connect: boolean = true, 
-        serializationOptions: SerializationOptions = {}
+        name: string,
+        options: RedisOptions,
+        connect: boolean = true,
+        serializationOptions: SerializationOptions = {},
+        private readonly providerOptions: RedisCacheProviderOptions = {}
     ) {
+        // Set defaults
+        this.providerOptions.failFast = this.providerOptions.failFast ?? true;
+        this.providerOptions.exitCode = this.providerOptions.exitCode ?? 1;
         this.client_client = new IORedis(options);
         this.connect = connect;
+        this._serializationOptions = serializationOptions;
         if (connect)
             this.connected_promise = this.client_client.connect();
         else
             this.connected_promise = Promise.resolve("told not to connect");
-        this._serializationOptions = serializationOptions;
 
-        const errorOrCloseCB = (...args: any[]) => {
-            console.log(`Error in RedisClient: ${name}.`, "\r\n", ...args);
-            process.exit(55666);
-        }
-        this.client_client.on("end", errorOrCloseCB.bind(null, "end"))
-        this.client_client.on("error", errorOrCloseCB.bind(null, "error"));
-        this.client_client.on("close", errorOrCloseCB.bind(null, "close"));
-        this.client_client.on("finish", errorOrCloseCB.bind(null, "finish"));
+        const handleFatalError = (type: string, error?: any) => {
+            const errorMessage = `FATAL: Redis connection failure for cache '${name}' [${type}]`;
+            console.error(errorMessage, error);
+
+            if (this.providerOptions.failFast) {
+                console.error(`Cache is configured as critical. Exiting with code ${this.providerOptions.exitCode}.`);
+
+                // Call cleanup hook if provided
+                if (this.providerOptions.onFatalError) {
+                    try {
+                        this.providerOptions.onFatalError(new Error(errorMessage));
+                    } catch (e) {
+                        console.error('Error in onFatalError hook:', e);
+                    }
+                }
+
+                // Give time for logs to flush
+                setTimeout(() => {
+                    process.exit(this.providerOptions.exitCode!);
+                }, 100);
+            } else {
+                // Non-critical mode: emit error for application handling
+                this.client_client.emit('connection-error', {type, error, timestamp: Date.now()});
+            }
+        };
+
+        // Connection-critical events
+        this.client_client.on("error", (err) => handleFatalError("error", err));
+        this.client_client.on("end", () => {
+            if (this.connect) {  // Only fatal if we were supposed to be connected
+                handleFatalError("unexpected-end");
+            }
+        });
     }
 
     getClientConnectionPromise() {
@@ -49,18 +84,18 @@ export class RedisCacheProvider implements CacheProvider<string> {
             throw new Error("shouldnt call as client initialised with connect=false");
     }
 
-    get(key: string) {
+    async get(key: string): Promise<string | null> {
         return this.client_client.get(key);
     }
 
-    set(key: string, value: string, ttl: number = -1) {
-        if (ttl > 0)
+    async set(key: string, value: string, ttl?: TTL): Promise<"OK" | null> {
+        if (ttl && ttl > 0)
             return this.client_client.set(key, value, "EX", ttl);
         else
             return this.client_client.set(key, value);
     }
 
-    del(...keys: string[]) {
+    async del(...keys: string[]): Promise<number> {
         return this.client_client.del(...keys);
     }
 
@@ -75,19 +110,19 @@ export class RedisCacheProvider implements CacheProvider<string> {
         return this.client_client;
     }
 
-    pipeline() {
+    pipeline(): Pipeline<string> {
         return this.client_client.pipeline() as any;
     }
 
-    expire(key: string, ttl: number) {
+    async expire(key: string, ttl: number): Promise<0 | 1> {
         return this.client_client.expire(key, ttl) as Promise<0 | 1>;
     }
 
-    mget(...keys: string[]) {
+    async mget(...keys: string[]): Promise<(string | null)[]> {
         return this.client_client.mget(...keys);
     }
 
-    mset(...keyValues: [CacheKey, string][]) {
+    async mset(...keyValues: [CacheKey, string][]): Promise<"OK" | null> {
         return this.client_client.mset(...keyValues as any);
     }
 
