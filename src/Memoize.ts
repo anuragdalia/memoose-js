@@ -2,7 +2,7 @@ import {CacheKeyGenerator as CacheKeyGenerator} from "./CacheKeyGenerator";
 import {CacheKey, CacheProvider, Pipeline, TDeserializer, TSerializer, TTL} from "./adapters/base";
 import {MemoryCacheProvider} from "./adapters";
 
-export const stats: any = {redis: {}, memory: {}};
+export const stats: Record<string, Record<string, any>> = {};
 
 export type CachedItem = string | { data: any, reject: boolean }
 export type MemoizeConfig<Args extends Array<any> = any[], T = any> = {
@@ -57,9 +57,12 @@ export class Memoize<Args extends Array<any> = any[], ReturnType = any> {
         this.deserializer = this.cache.serializationOptions.deserializer;
         this.name = this.cache.name();
 
-        //add chunking for default function if needed
         if (this.functionName === "")
             throw new Error("Anonymous functions can not be memoized. You can pass functionName in options");
+
+        if (!stats[this.name]) {
+            stats[this.name] = {};
+        }
 
         stats[this.name][this.functionName] = stats[this.name][this.functionName] || {
             hit: 0,
