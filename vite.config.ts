@@ -11,7 +11,7 @@ export default defineConfig({
             formats: ['es', 'cjs']
         },
         rollupOptions: {
-            external: ['lodash', 'object-hash', 'ioredis', 'mongoose', 'ioredis/built/cluster/ClusterOptions', 'ioredis/built/cluster'],
+            external: ['lodash', 'object-hash', 'ioredis', 'mongoose', '@vercel/kv'],
             output: {
                 preserveModules: false,
                 exports: 'named'

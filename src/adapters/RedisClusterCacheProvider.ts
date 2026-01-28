@@ -1,6 +1,4 @@
-import {Cluster} from "ioredis";
-import {ClusterOptions} from "ioredis/built/cluster/ClusterOptions";
-import {ClusterNode} from "ioredis/built/cluster";
+import {Cluster, ClusterNode, ClusterOptions} from "ioredis";
 import {CacheKey, CacheProvider, Pipeline, SerializationOptions, TTL} from "./base";
 
 export interface RedisClusterCacheProviderOptions {
