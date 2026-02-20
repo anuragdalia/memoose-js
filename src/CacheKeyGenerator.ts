@@ -1,8 +1,9 @@
-import {Schema} from "mongoose";
 import objectHash from "object-hash";
 import _ from "lodash";
-import ObjectId = Schema.Types.ObjectId;
 
+function isObjectId(o: any): boolean {
+    return o != null && (o._bsontype === 'ObjectID' || o._bsontype === 'ObjectId' || o.constructor?.name === 'ObjectId');
+}
 
 export class CacheKeyGenerator {
     private readonly function_name: string;
@@ -31,7 +32,7 @@ export class CacheKeyGenerator {
         if (o === undefined) return "__undefined__";
         if (o === null) return "__null__";
 
-        if (o instanceof ObjectId) return String(o);
+        if (isObjectId(o)) return String(o);
         if (o._id) return String(o._id);
         if (o.id) return String(o.id);
         if (o instanceof Date) return o.getTime();

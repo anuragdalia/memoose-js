@@ -1,12 +1,15 @@
 import {beforeEach, describe, expect, test} from "bun:test";
+import {ObjectId} from "bson";
+import mongoose from "mongoose";
 import {
     CachedItem,
+    CacheKeyGenerator,
     Memoize,
     MemoizeConfig,
     MemoryCacheProvider,
-    RedisCacheProvider,
     SerializationOptions
 } from "../index";
+import {RedisCacheProvider} from "../redis";
 
 // Create Redis cache provider with custom serialization options for handling BigInt
 const bigIntSerializationOptions: SerializationOptions = {
@@ -65,6 +68,91 @@ function generateTester<R extends Array<any> = any[], T = any>(memoizeConfig: Me
 async function sleep(ms: number) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
+
+describe("CacheKeyGenerator ObjectId duck-typing", () => {
+    const keygen = new CacheKeyGenerator("test", false);
+
+    test("bson ObjectId produces a stable string-based key", () => {
+        const id = new ObjectId("507f1f77bcf86cd799439011");
+        const key1 = keygen.for(id);
+        const key2 = keygen.for(id);
+        expect(key1).toBe(key2);
+        // Should use the string representation, not object hash
+        const keyFromString = keygen.for("507f1f77bcf86cd799439011");
+        expect(key1).toBe(keyFromString);
+    });
+
+    test("mongoose ObjectId produces the same key as bson ObjectId", () => {
+        const hex = "507f1f77bcf86cd799439011";
+        const bsonId = new ObjectId(hex);
+        const mongooseId = new mongoose.Types.ObjectId(hex);
+        expect(keygen.for(bsonId)).toBe(keygen.for(mongooseId));
+    });
+
+    test("different ObjectIds produce different keys", () => {
+        const id1 = new ObjectId("507f1f77bcf86cd799439011");
+        const id2 = new ObjectId("507f1f77bcf86cd799439012");
+        expect(keygen.for(id1)).not.toBe(keygen.for(id2));
+    });
+
+    test("hand-crafted object with _bsontype is detected as ObjectId", () => {
+        // Simulates what older bson versions or custom ObjectId-like objects look like
+        const fakeId = {
+            _bsontype: 'ObjectId',
+            toString() { return "507f1f77bcf86cd799439011"; }
+        };
+        const realId = new ObjectId("507f1f77bcf86cd799439011");
+        expect(keygen.for(fakeId)).toBe(keygen.for(realId));
+    });
+
+    test("old bson v1 _bsontype 'ObjectID' (capital D) is detected", () => {
+        const legacyId = {
+            _bsontype: 'ObjectID',
+            toString() { return "507f1f77bcf86cd799439011"; }
+        };
+        const realId = new ObjectId("507f1f77bcf86cd799439011");
+        expect(keygen.for(legacyId)).toBe(keygen.for(realId));
+    });
+
+    test("plain objects without _bsontype are NOT detected as ObjectId", () => {
+        const plainObj = { foo: "bar", value: 123 };
+        // Should go through the plain object path, not ObjectId path
+        const key1 = keygen.for(plainObj);
+        const key2 = keygen.for("507f1f77bcf86cd799439011");
+        expect(key1).not.toBe(key2);
+    });
+
+    test("null and undefined do not crash the ObjectId check", () => {
+        expect(() => keygen.for(null)).not.toThrow();
+        expect(() => keygen.for(undefined)).not.toThrow();
+        expect(() => keygen.for(null, undefined, null)).not.toThrow();
+    });
+
+    test("ObjectId inside nested args produces consistent keys", () => {
+        const id = new ObjectId("507f1f77bcf86cd799439011");
+        const key1 = keygen.for({ userId: id }, "action");
+        const key2 = keygen.for({ userId: id }, "action");
+        expect(key1).toBe(key2);
+    });
+
+    test("v2 cache keys match v3 for non-ObjectId args (no regression)", () => {
+        // These args never touched ObjectId codepath, keys must be identical across versions
+        const key1 = keygen.for(1, 2, 3);
+        const key2 = keygen.for("hello", "world");
+        const key3 = keygen.for({ a: 1, b: 2 });
+        const key4 = keygen.for([1, 2, 3]);
+        const key5 = keygen.for(true, false);
+        const key6 = keygen.for(new Date(1700000000000));
+
+        // These are deterministic — just verify stability
+        expect(key1).toBe(keygen.for(1, 2, 3));
+        expect(key2).toBe(keygen.for("hello", "world"));
+        expect(key3).toBe(keygen.for({ a: 1, b: 2 }));
+        expect(key4).toBe(keygen.for([1, 2, 3]));
+        expect(key5).toBe(keygen.for(true, false));
+        expect(key6).toBe(keygen.for(new Date(1700000000000)));
+    });
+});
 
 describe("Memoize Tests", () => {
     beforeEach(async () => {

@@ -5,15 +5,16 @@ import {resolve} from 'path';
 export default defineConfig({
     build: {
         lib: {
-            entry: resolve(__dirname, 'src/index.ts'),
-            name: 'MemooseJS',
-            fileName: (format) => format === 'es' ? 'index.mjs' : 'index.js',
-            formats: ['es', 'cjs']
+            entry: {
+                'index': resolve(__dirname, 'src/index.ts'),
+                'redis': resolve(__dirname, 'src/redis.ts'),
+            },
+            fileName: (format, entryName) => `${entryName}.js`,
+            formats: ['es']
         },
         rollupOptions: {
-            external: ['lodash', 'object-hash', 'ioredis', 'mongoose', '@vercel/kv'],
+            external: ['lodash', 'object-hash', 'ioredis', '@vercel/kv'],
             output: {
-                preserveModules: false,
                 exports: 'named'
             }
         },
