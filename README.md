@@ -1,91 +1,93 @@
 # Memoose-js
 
-**Memoose-js** is a versatile memoization library designed to optimize performance in JavaScript applications by caching
-the results of expensive function calls. This package efficiently reduces the frequency of repeated computations,
-speeding up overall application responsiveness and reducing server load.
+Memoization library with swappable cache providers. Write your caching logic once, swap the provider per environment.
+
+| Provider | Import | Use case | Extra install |
+|----------|--------|----------|---------------|
+| `MemoryCacheProvider` | `memoose-js` | Development, single-process apps | None |
+| `DisabledCacheProvider` | `memoose-js` | Tests, debugging (cache passthrough) | None |
+| `RedisCacheProvider` | `memoose-js/redis` | Production, multi-process/multi-server | `ioredis` |
+| `RedisClusterCacheProvider` | `memoose-js/redis` | Production with Redis Cluster | `ioredis` |
+
+All providers implement the same `CacheProvider` interface — your business logic doesn't change between environments.
 
 ## Key Features
 
-- **Time-to-Live (TTL) Support**: Customize the lifespan of cached results with a configurable TTL, ensuring your data
-  remains up-to-date.
-- **Versatile Cache Providers**: Integrates seamlessly with various caching backends, including Redis and in-memory
-  solutions, offering flexibility for different operational environments.
-- **Concurrency Management**: Built-in mechanisms handle concurrent accesses smoothly, maintaining data integrity and
-  consistency across asynchronous operations.
-- **Adaptive Cache Key Generation**: Features customizable cache key generation strategies to accommodate functions
-  where the order of arguments is irrelevant to the output.
-- **Custom Serialization Support**: Provides options for custom serializers and deserializers, making it easy to handle
-  complex data types like BigInt, Date, or custom objects that aren't natively supported by JSON.
-- **Batch Execution Support**: Enhances performance for batch operations through its multi-execution capabilities,
-  reducing processing time and resource consumption.
-- **Robust Error Handling**: Implements error management strategies to maintain application stability even when the
-  cached functions fail.
+- **Swappable Cache Providers**: Memory, Redis, Redis Cluster, or disabled — same `CacheProvider` interface across environments
+- **TTL Support**: Configurable time-to-live on cached results
+- **Batch Operations**: `multiCall` fetches many keys at once, only computing cache misses
+- **Custom Serialization**: Handle BigInt, Date, or custom objects with pluggable serializers
+- **Cache Key Generation**: Deterministic keys from function arguments, with optional order-insensitive mode
+- **TypeScript**: Full type support
 
-## Why Use Memoose-js?
+## Installation
 
-**Memoose-js** is ideal for developers looking to boost the efficiency of applications that rely heavily on data
-processing and computation. Whether you're building complex web applications, APIs, or data-intensive backends,
-memoose-js offers a straightforward way to introduce powerful caching strategies that are both scalable and easy to
-implement.
+```bash
+npm install memoose-js
+```
 
-## Contributing
+To use Redis cache providers, also install `ioredis`:
 
-We welcome contributions from the community! We appreciate any contributions,
-whether they are feature enhancements, bug fixes, documentation updates, or test improvements.
+```bash
+npm install ioredis
+```
 
-### Sample Usage
+## v3.0.0 Breaking Changes
 
-Below is a simple example demonstrating how to use **Memoose-js** to memoize a function that computes the sum of its
-arguments. This example uses an in-memory cache provider to store the results with a TTL (time-to-live) of 10 seconds.
+**ESM-only**: Memoose-js v3.0.0 no longer supports CommonJS. Use ES modules with `import` statements.
+
+**Redis imports moved**: Import Redis providers from the `memoose-js/redis` subpath:
 
 ```typescript
-import { Memoize, MemoryCacheProvider, RedisCacheProvider, SerializationOptions } from 'memoose-js';
+// v3.0.0+
+import { Memoize, MemoryCacheProvider } from 'memoose-js';
+import { RedisCacheProvider, RedisClusterCacheProvider } from 'memoose-js/redis';
+```
 
-// Define a function to be memoized
+**Simplified dependencies**: `mongoose` is no longer a peer dependency. `ioredis` is optional and only required for `memoose-js/redis`.
+
+## Usage
+
+### Basic Example
+
+```typescript
+import { Memoize, MemoryCacheProvider } from 'memoose-js';
+
 function computeSum(...numbers) {
   return numbers.reduce((sum, num) => sum + num, 0);
 }
 
-// Create an instance of the MemoryCacheProvider
 const memoryCacheProvider = new MemoryCacheProvider();
-
-// Initialize Memoize with the function, a TTL of 10 seconds, and the memory cache provider
 const memoizedSum = new Memoize(computeSum, 10, {
   cacheProvider: memoryCacheProvider
 });
 
-// Using the memoized function
 async function testMemoization() {
-  // First call: computes the result and caches it
   const result1 = await memoizedSum.call(1, 2, 3);
-  console.log('First call result:', result1);  // Output: 6
+  console.log('First call:', result1);  // Computes and caches
 
-  // Second call with the same arguments before TTL expires: retrieves result from cache
   const result2 = await memoizedSum.call(1, 2, 3);
-  console.log('Second call result (from cache):', result2);  // Output: 6
+  console.log('Second call:', result2);  // Returns from cache
 }
 
 testMemoization();
 ```
 
-### Advanced Example: Custom Serialization with BigInt Support
+### Advanced Example: Redis with Custom Serialization
 
-When working with databases or other systems that use BigInt values, standard JSON serialization fails because BigInt isn't natively supported in JSON. Memoose-js solves this with custom serialization options:
+Handle BigInt and other complex types with Redis:
 
 ```typescript
-import { Memoize, RedisCacheProvider, SerializationOptions } from 'memoose-js';
+import { Memoize } from 'memoose-js';
+import { RedisCacheProvider } from 'memoose-js/redis';
+import type { SerializationOptions } from 'memoose-js';
 
-// Custom serialization options for handling BigInt values
-const bigIntSerializationOptions: SerializationOptions = {
+const bigIntSerialization: SerializationOptions = {
   serializer: (key, value) => {
-    // Convert BigInt to a specially formatted string
-    if (typeof value === 'bigint') {
-      return `__BIGINT__${value.toString()}`;
-    }
+    if (typeof value === 'bigint') return `__BIGINT__${value.toString()}`;
     return value;
   },
   deserializer: (key, value) => {
-    // Convert the formatted string back to BigInt
     if (typeof value === 'string' && value.startsWith('__BIGINT__')) {
       return BigInt(value.substring(10));
     }
@@ -93,30 +95,29 @@ const bigIntSerializationOptions: SerializationOptions = {
   }
 };
 
-// Create Redis provider with custom serialization
 const redisProvider = new RedisCacheProvider(
-  "myapp", 
-  { host: "localhost", port: 6379 }, 
-  true, 
-  bigIntSerializationOptions
+  "myapp",
+  { host: "localhost", port: 6379 },
+  true,
+  bigIntSerialization
 );
 
-// Function that works with database records
-async function getUserById(id) {
-  // Normally this would fetch from a database
+async function getUserById(id: bigint) {
   return {
-    id: BigInt(id),
-    name: "User " + id,
+    id,
+    name: "User " + id.toString(),
     created: BigInt(Date.now())
   };
 }
 
-// Memoize the function with Redis cache
 const memoizedGetUser = new Memoize(getUserById, 300, {
   cacheProvider: redisProvider
 });
 
-// Now you can safely work with BigInt values in your cached results
-const user = await memoizedGetUser.call(123456789012345);
-console.log(user.id); // BigInt value preserved
+const user = await memoizedGetUser.call(BigInt(123456789012345));
+console.log(user.id); // BigInt preserved
+```
 
+## Contributing
+
+We welcome contributions from the community. Please feel free to submit feature enhancements, bug fixes, documentation updates, or test improvements.

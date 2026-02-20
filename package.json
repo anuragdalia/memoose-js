@@ -14,8 +14,14 @@
       "import": "./dist/redis.js"
     }
   },
+  "description": "Memoization with swappable cache providers — same code in dev (memory), test (disabled), and prod (Redis). Just swap the provider.",
+  "homepage": "https://github.com/anuragdalia/memoose-js#readme",
   "repository": {
-    "url": "https://github.com/anuragdalia/memoose-js"
+    "type": "git",
+    "url": "git+https://github.com/anuragdalia/memoose-js.git"
+  },
+  "bugs": {
+    "url": "https://github.com/anuragdalia/memoose-js/issues"
   },
   "author": {
     "name": "Anurag Dalia",
@@ -58,22 +64,16 @@
     "vite-plugin-dts": "^4.5.4"
   },
   "keywords": [
+    "memoize",
     "memoization",
-    "caching",
-    "performance-enhancement",
-    "data-caching",
-    "function-caching",
-    "cache-management",
-    "ttl-cache",
-    "nodejs-caching",
+    "cache",
+    "redis",
+    "ttl",
+    "in-memory-cache",
+    "typescript",
+    "nextjs",
+    "batch-cache",
     "async-cache",
-    "redis-cache",
-    "memory-cache",
-    "cache-keys",
-    "cache-provider",
-    "efficient-computing",
-    "api-caching",
-    "decorator-cache",
-    "server-side-cache"
+    "function-cache"
   ]
 }
